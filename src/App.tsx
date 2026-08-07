@@ -78,6 +78,12 @@ function sampleStops(
   return out
 }
 
+function thinStops<T>(stops: T[], max = 36): T[] {
+  if (stops.length <= max) return stops
+  const step = Math.ceil(stops.length / max)
+  return stops.filter((_, i) => i % step === 0 || i === stops.length - 1)
+}
+
 function routeBadgeIcon(number: string, color: string) {
   return L.divIcon({
     className: 'route-map-badge',
@@ -222,9 +228,8 @@ export default function App() {
       if (!selected.has(route.id)) continue
       const stops = routeStops[route.id]
       if (!stops?.length) continue
-      // Show outbound stops to reduce clutter; fall back to all
       const list = stops.filter((s) => s.dir === 0)
-      const use = list.length >= 5 ? list : stops
+      const use = thinStops(list.length >= 5 ? list : stops, 28)
       for (const s of use) {
         out.push({
           key: `${route.id}-${s.id}-${s.seq}`,
@@ -556,8 +561,8 @@ export default function App() {
               positions={line.positions}
               pathOptions={{
                 color: '#ffffff',
-                weight: 9,
-                opacity: 0.95,
+                weight: 14,
+                opacity: 1,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
@@ -570,8 +575,8 @@ export default function App() {
               positions={line.positions}
               pathOptions={{
                 color: line.color,
-                weight: 5.5,
-                opacity: 0.95,
+                weight: 8,
+                opacity: 1,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
@@ -582,7 +587,7 @@ export default function App() {
             <CircleMarker
               key={stop.key}
               center={[stop.lat, stop.lng]}
-              radius={4.5}
+              radius={3.2}
               pathOptions={{
                 color: stop.color,
                 weight: 2,
@@ -590,13 +595,12 @@ export default function App() {
                 fillOpacity: 1,
               }}
             >
-              <Tooltip direction="top" offset={[0, -6]} className="stop-tooltip">
+              <Tooltip direction="top" offset={[0, -4]} className="stop-tooltip">
                 {stop.name}
               </Tooltip>
             </CircleMarker>
           ))}
 
-          {/* Fallback dots when official stops are missing */}
           {activeRoutes
             .filter((line) => !routeStops[line.id]?.length)
             .map((line) =>
@@ -604,7 +608,7 @@ export default function App() {
                 <CircleMarker
                   key={`${line.id}-stop-${i}`}
                   center={pos}
-                  radius={4.5}
+                  radius={3.2}
                   pathOptions={{
                     color: line.color,
                     weight: 2,
