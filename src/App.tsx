@@ -151,9 +151,10 @@ export default function App() {
   const stopAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    const base = import.meta.env.BASE_URL
     Promise.all([
-      fetch('/routes/geometries.json').then((r) => r.json()),
-      fetch('/routes/routeStops.json').then((r) => (r.ok ? r.json() : {})),
+      fetch(`${base}routes/geometries.json`).then((r) => r.json()),
+      fetch(`${base}routes/routeStops.json`).then((r) => (r.ok ? r.json() : {})),
     ])
       .then(([geo, stops]) => {
         setGeometries(geo)

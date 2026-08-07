@@ -76,7 +76,7 @@ function dedupeStops(stops: RawStop[], query: string): BusStop[] {
 
 async function loadLocalStops(): Promise<BusStop[]> {
   if (!localStopsPromise) {
-    localStopsPromise = fetch('/routes/stops.json')
+    localStopsPromise = fetch(`${import.meta.env.BASE_URL}routes/stops.json`)
       .then((r) => (r.ok ? r.json() : []))
       .catch(() => [])
   }
