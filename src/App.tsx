@@ -104,21 +104,15 @@ function pinnedStopIcon(name: string) {
 
 function FitView({
   polylines,
-  stops,
 }: {
   polylines: [number, number][][]
-  stops: BusStop[]
 }) {
   const map = useMap()
 
   const fit = useEffectEvent(() => {
-    const points: [number, number][] = [
-      ...polylines.flatMap((line) => line),
-      ...stops.map((s) => [s.lat, s.lng] as [number, number]),
-    ]
+    const points = polylines.flatMap((line) => line)
 
     if (points.length === 0) {
-      map.setView([37.45, 126.68], 11)
       return
     }
 
@@ -130,13 +124,29 @@ function FitView({
     const bounds = L.latLngBounds(points)
     map.fitBounds(bounds, {
       padding: [64, 64],
-      maxZoom: stops.length && !polylines.length ? 15 : 12,
+      maxZoom: 12,
     })
   })
 
   useEffect(() => {
     fit()
-  }, [polylines, stops])
+  }, [polylines])
+
+  return null
+}
+
+function FocusStop({
+  target,
+}: {
+  target: { lat: number; lng: number; key: number } | null
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!target) return
+    const zoom = Math.max(map.getZoom(), 15)
+    map.flyTo([target.lat, target.lng], zoom, { duration: 0.55 })
+  }, [target?.key, map])
 
   return null
 }
@@ -151,6 +161,11 @@ export default function App() {
   const [stopQuery, setStopQuery] = useState('')
   const [stopResults, setStopResults] = useState<BusStop[]>([])
   const [pinnedStops, setPinnedStops] = useState<BusStop[]>([])
+  const [focusStop, setFocusStop] = useState<{
+    lat: number
+    lng: number
+    key: number
+  } | null>(null)
   const [stopSearching, setStopSearching] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
   const [stopPanelOpen, setStopPanelOpen] = useState(false)
@@ -302,6 +317,7 @@ export default function App() {
       if (prev.some((s) => s.id === stop.id)) return prev
       return [...prev, stop]
     })
+    setFocusStop({ lat: stop.lat, lng: stop.lng, key: Date.now() })
   }
 
   function unpinStop(id: string) {
@@ -553,7 +569,8 @@ export default function App() {
           />
           <ZoomControl position="bottomright" />
           <ScaleControl position="bottomright" imperial={false} maxWidth={140} />
-          <FitView polylines={boundsPolylines} stops={pinnedStops} />
+          <FitView polylines={boundsPolylines} />
+          <FocusStop target={focusStop} />
 
           {activeRoutes.map((line) => (
             <Polyline
@@ -561,8 +578,8 @@ export default function App() {
               positions={line.positions}
               pathOptions={{
                 color: '#ffffff',
-                weight: 14,
-                opacity: 1,
+                weight: 11,
+                opacity: 0.35,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
@@ -575,8 +592,8 @@ export default function App() {
               positions={line.positions}
               pathOptions={{
                 color: line.color,
-                weight: 8,
-                opacity: 1,
+                weight: 6,
+                opacity: 0.52,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
