@@ -93,49 +93,131 @@ function routeBadgeIcon(number: string, color: string) {
   })
 }
 
-/** One badge per route: on the path, as close to the viewport edge as possible. */
-function badgePointOnRoute(
-  positions: [number, number][],
-  bounds: L.LatLngBounds,
-): [number, number] | null {
-  if (positions.length === 0) return null
+type BadgeCandidate = { pos: [number, number]; score: number }
 
-  // Keep badges fully on-screen (slight inset), but pull toward the true frame edge.
-  const frame = bounds
-  const inset = bounds.pad(-0.05)
-  const south = frame.getSouth()
-  const north = frame.getNorth()
-  const west = frame.getWest()
-  const east = frame.getEast()
+function edgeScoreForBounds(bounds: L.LatLngBounds, lat: number, lng: number) {
+  const south = bounds.getSouth()
+  const north = bounds.getNorth()
+  const west = bounds.getWest()
+  const east = bounds.getEast()
   const latSpan = Math.max(north - south, 1e-9)
   const lngSpan = Math.max(east - west, 1e-9)
+  return Math.min(
+    (lat - south) / latSpan,
+    (north - lat) / latSpan,
+    (lng - west) / lngSpan,
+    (east - lng) / lngSpan,
+  )
+}
 
-  const edgeScore = (lat: number, lng: number) =>
-    Math.min(
-      (lat - south) / latSpan,
-      (north - lat) / latSpan,
-      (lng - west) / lngSpan,
-      (east - lng) / lngSpan,
-    )
+function badgeCandidatesOnRoute(
+  positions: [number, number][],
+  inset: L.LatLngBounds,
+  frame: L.LatLngBounds,
+): BadgeCandidate[] {
+  if (positions.length === 0) return []
 
-  let bestVisible: [number, number] | null = null
-  let bestVisibleScore = Infinity
-  let bestOverall = positions[Math.floor(positions.length * 0.38)] ?? positions[0]
-  let bestOverallScore = Infinity
+  const visible: BadgeCandidate[] = []
+  const all: BadgeCandidate[] = []
+  const step = Math.max(1, Math.floor(positions.length / 400))
 
-  for (const p of positions) {
-    const score = edgeScore(p[0], p[1])
-    if (score < bestOverallScore) {
-      bestOverallScore = score
-      bestOverall = p
-    }
-    if (inset.contains(L.latLng(p[0], p[1])) && score < bestVisibleScore) {
-      bestVisibleScore = score
-      bestVisible = p
+  for (let i = 0; i < positions.length; i += step) {
+    const p = positions[i]
+    const score = edgeScoreForBounds(frame, p[0], p[1])
+    all.push({ pos: p, score })
+    if (inset.contains(L.latLng(p[0], p[1]))) {
+      visible.push({ pos: p, score })
     }
   }
 
-  return bestVisible ?? bestOverall
+  // Always include endpoints of the visible stretch
+  const last = positions[positions.length - 1]
+  if (last) {
+    const score = edgeScoreForBounds(frame, last[0], last[1])
+    all.push({ pos: last, score })
+    if (inset.contains(L.latLng(last[0], last[1]))) {
+      visible.push({ pos: last, score })
+    }
+  }
+
+  const pool = visible.length > 0 ? visible : all
+  return pool.sort((a, b) => a.score - b.score)
+}
+
+/** Place one badge per route on the path, near the edge, without overlaps. */
+function placeRouteBadges(
+  routes: ActiveRoute[],
+  bounds: L.LatLngBounds,
+  map: L.Map,
+  minSepPx = 64,
+) {
+  const frame = bounds
+  const inset = bounds.pad(-0.05)
+  const placedPx: { x: number; y: number }[] = []
+  const out: {
+    key: string
+    pos: [number, number]
+    number: string
+    color: string
+  }[] = []
+
+  // Prefer routes whose best edge spot is closest to the rim first
+  const ranked = routes
+    .map((line) => {
+      const candidates = badgeCandidatesOnRoute(line.positions, inset, frame)
+      return { line, candidates, best: candidates[0]?.score ?? 1 }
+    })
+    .sort((a, b) => a.best - b.best)
+
+  for (const { line, candidates } of ranked) {
+    if (candidates.length === 0) continue
+
+    let chosen: BadgeCandidate | null = null
+    for (const c of candidates) {
+      const pt = map.latLngToContainerPoint(c.pos)
+      const ok = placedPx.every(
+        (p) => Math.hypot(p.x - pt.x, p.y - pt.y) >= minSepPx,
+      )
+      if (ok) {
+        chosen = c
+        placedPx.push({ x: pt.x, y: pt.y })
+        break
+      }
+    }
+
+    // Soften separation if the route has nowhere free near the edge
+    if (!chosen) {
+      for (const sep of [48, 36, 24]) {
+        for (const c of candidates) {
+          const pt = map.latLngToContainerPoint(c.pos)
+          const ok = placedPx.every(
+            (p) => Math.hypot(p.x - pt.x, p.y - pt.y) >= sep,
+          )
+          if (ok) {
+            chosen = c
+            placedPx.push({ x: pt.x, y: pt.y })
+            break
+          }
+        }
+        if (chosen) break
+      }
+    }
+
+    if (!chosen) {
+      chosen = candidates[0]
+      const pt = map.latLngToContainerPoint(chosen.pos)
+      placedPx.push({ x: pt.x, y: pt.y })
+    }
+
+    out.push({
+      key: `${line.id}-badge`,
+      pos: chosen.pos,
+      number: line.number,
+      color: line.color,
+    })
+  }
+
+  return out
 }
 
 function RouteBadges({ routes }: { routes: ActiveRoute[] }) {
@@ -157,20 +239,8 @@ function RouteBadges({ routes }: { routes: ActiveRoute[] }) {
   }, [map])
 
   const badges = useMemo(
-    () =>
-      routes.flatMap((line) => {
-        const pos = badgePointOnRoute(line.positions, bounds)
-        if (!pos) return []
-        return [
-          {
-            key: `${line.id}-badge`,
-            pos,
-            number: line.number,
-            color: line.color,
-          },
-        ]
-      }),
-    [routes, bounds],
+    () => placeRouteBadges(routes, bounds, map),
+    [routes, bounds, map],
   )
 
   return (

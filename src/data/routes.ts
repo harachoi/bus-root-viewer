@@ -29,10 +29,21 @@ const PALETTE = [
   '#BE123C', // M6450
   '#7E22CE', // M6724
   '#B45309', // 급행99
+  '#0369A1', // 65-1
+  '#B91C1C', // 112
+  '#0F766E', // 330
+  '#A21CAF', // 523
+  '#C2410C', // 순환52
 ]
 
 export const BUS_ROUTES: BusRoute[] = [
   { id: '103', number: '103', origin: '동춘동차고지', destination: '상정중학교' },
+  {
+    id: '112',
+    number: '112',
+    origin: '십정동차고지',
+    destination: '동춘동차고지',
+  },
   {
     id: '1300',
     number: '1300',
@@ -64,6 +75,12 @@ export const BUS_ROUTES: BusRoute[] = [
     destination: '송도파크레인동일하이빌',
   },
   {
+    id: '330',
+    number: '330',
+    origin: '신흥교통입구',
+    destination: '인천공항T2',
+  },
+  {
     id: '34',
     number: '34',
     origin: '무지개아파트(동남아파트)',
@@ -92,6 +109,18 @@ export const BUS_ROUTES: BusRoute[] = [
     number: '522',
     origin: '남동인더스파크역',
     destination: '주안역',
+  },
+  {
+    id: '523',
+    number: '523',
+    origin: '무지개아파트(동남아파트)',
+    destination: '인명여자고등학교',
+  },
+  {
+    id: '65-1',
+    number: '65-1',
+    origin: '무지개아파트(동남아파트)',
+    destination: '주안역환승정류장',
   },
   {
     id: '6777',
@@ -152,6 +181,12 @@ export const BUS_ROUTES: BusRoute[] = [
     number: '급행99',
     origin: '송도제2차고지',
     destination: '송내역남부',
+  },
+  {
+    id: '순환52',
+    number: '순환52',
+    origin: '소래포구역종점',
+    destination: '송도역',
   },
 ].map((route, i) => ({
   ...route,
