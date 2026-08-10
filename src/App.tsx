@@ -93,6 +93,101 @@ function routeBadgeIcon(number: string, color: string) {
   })
 }
 
+/** One badge per route: on the path, as close to the viewport edge as possible. */
+function badgePointOnRoute(
+  positions: [number, number][],
+  bounds: L.LatLngBounds,
+): [number, number] | null {
+  if (positions.length === 0) return null
+
+  // Keep badges fully on-screen (slight inset), but pull toward the true frame edge.
+  const frame = bounds
+  const inset = bounds.pad(-0.05)
+  const south = frame.getSouth()
+  const north = frame.getNorth()
+  const west = frame.getWest()
+  const east = frame.getEast()
+  const latSpan = Math.max(north - south, 1e-9)
+  const lngSpan = Math.max(east - west, 1e-9)
+
+  const edgeScore = (lat: number, lng: number) =>
+    Math.min(
+      (lat - south) / latSpan,
+      (north - lat) / latSpan,
+      (lng - west) / lngSpan,
+      (east - lng) / lngSpan,
+    )
+
+  let bestVisible: [number, number] | null = null
+  let bestVisibleScore = Infinity
+  let bestOverall = positions[Math.floor(positions.length * 0.38)] ?? positions[0]
+  let bestOverallScore = Infinity
+
+  for (const p of positions) {
+    const score = edgeScore(p[0], p[1])
+    if (score < bestOverallScore) {
+      bestOverallScore = score
+      bestOverall = p
+    }
+    if (inset.contains(L.latLng(p[0], p[1])) && score < bestVisibleScore) {
+      bestVisibleScore = score
+      bestVisible = p
+    }
+  }
+
+  return bestVisible ?? bestOverall
+}
+
+function RouteBadges({ routes }: { routes: ActiveRoute[] }) {
+  const map = useMap()
+
+  if (!map.getPane('routeBadges')) {
+    const pane = map.createPane('routeBadges')
+    pane.style.zIndex = '650'
+  }
+
+  const [bounds, setBounds] = useState(() => map.getBounds())
+
+  useEffect(() => {
+    const sync = () => setBounds(map.getBounds())
+    map.on('zoomend moveend', sync)
+    return () => {
+      map.off('zoomend moveend', sync)
+    }
+  }, [map])
+
+  const badges = useMemo(
+    () =>
+      routes.flatMap((line) => {
+        const pos = badgePointOnRoute(line.positions, bounds)
+        if (!pos) return []
+        return [
+          {
+            key: `${line.id}-badge`,
+            pos,
+            number: line.number,
+            color: line.color,
+          },
+        ]
+      }),
+    [routes, bounds],
+  )
+
+  return (
+    <>
+      {badges.map((b) => (
+        <Marker
+          key={b.key}
+          position={b.pos}
+          icon={routeBadgeIcon(b.number, b.color)}
+          interactive={false}
+          pane="routeBadges"
+        />
+      ))}
+    </>
+  )
+}
+
 function pinnedStopIcon(name: string) {
   return L.divIcon({
     className: 'pinned-map-label',
@@ -636,14 +731,7 @@ export default function App() {
               )),
             )}
 
-          {activeRoutes.map((line) => (
-            <Marker
-              key={`${line.id}-badge`}
-              position={pointAlong(line.positions, 0.38)}
-              icon={routeBadgeIcon(line.number, line.color)}
-              interactive={false}
-            />
-          ))}
+          <RouteBadges routes={activeRoutes} />
 
           {pinnedStops.map((stop) => (
             <Marker

@@ -602,6 +602,7 @@ input {
 .route-map-badge {
   background: transparent !important;
   border: 0 !important;
+  pointer-events: none;
 }
 
 .route-map-badge-inner {
@@ -622,6 +623,10 @@ input {
     Pretendard,
     'Apple SD Gothic Neo',
     sans-serif;
+}
+
+.leaflet-routeBadges-pane {
+  z-index: 650;
 }
 
 .pinned-map-label {
